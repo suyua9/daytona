@@ -3,7 +3,7 @@
 
 package gitprovider
 
-type SigningMethod string // @name SigningMethod
+type SigningMethod string //	@name	SigningMethod
 
 const (
 	SigningMethodSSH SigningMethod = "ssh"
@@ -19,16 +19,16 @@ type GitProviderConfig struct {
 	Alias         string         `json:"alias" validate:"required"`
 	SigningKey    *string        `json:"signingKey,omitempty" validate:"optional"`
 	SigningMethod *SigningMethod `json:"signingMethod,omitempty" validate:"optional"`
-} // @name GitProvider
+} //	@name	GitProvider
 
 type GitUser struct {
 	Id       string `json:"id" validate:"required"`
 	Username string `json:"username" validate:"required"`
 	Name     string `json:"name" validate:"required"`
 	Email    string `json:"email" validate:"required"`
-} // @name GitUser
+} //	@name	GitUser
 
-type CloneTarget string // @name CloneTarget
+type CloneTarget string //	@name	CloneTarget
 
 const (
 	CloneTargetBranch CloneTarget = "branch"
@@ -46,17 +46,17 @@ type GitRepository struct {
 	Source   string      `json:"source" validate:"required"`
 	Path     *string     `json:"path,omitempty" validate:"optional"`
 	Target   CloneTarget `json:"cloneTarget,omitempty" validate:"optional"`
-} // @name GitRepository
+} //	@name	GitRepository
 
 type GitNamespace struct {
 	Id   string `json:"id" validate:"required"`
 	Name string `json:"name" validate:"required"`
-} // @name GitNamespace
+} //	@name	GitNamespace
 
 type GitBranch struct {
 	Name string `json:"name" validate:"required"`
 	Sha  string `json:"sha" validate:"required"`
-} // @name GitBranch
+} //	@name	GitBranch
 
 type GitPullRequest struct {
 	Name            string `json:"name" validate:"required"`
@@ -66,7 +66,7 @@ type GitPullRequest struct {
 	SourceRepoUrl   string `json:"sourceRepoUrl" validate:"required"`
 	SourceRepoOwner string `json:"sourceRepoOwner" validate:"required"`
 	SourceRepoName  string `json:"sourceRepoName" validate:"required"`
-} // @name GitPullRequest
+} //	@name	GitPullRequest
 
 type GitEventData struct {
 	Url           string   `json:"url" validate:"required"`

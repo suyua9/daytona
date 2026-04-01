@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
-import base64
 import json
 import re
 from collections.abc import Awaitable, Callable
@@ -12,6 +11,7 @@ import websockets
 from websockets.asyncio.client import connect
 
 from daytona_toolbox_api_client_async import (
+    CodeRunRequest,
     Command,
     CreateSessionRequest,
     ExecuteRequest,
@@ -22,6 +22,7 @@ from daytona_toolbox_api_client_async import (
     Session,
     SessionSendInputRequest,
 )
+from daytona_toolbox_api_client_async.exceptions import NotFoundException
 
 from .._utils.errors import intercept_errors
 from .._utils.otel_decorator import with_instrumentation
@@ -29,7 +30,6 @@ from .._utils.stream import std_demux_stream
 from .._utils.timeout import http_timeout
 from ..common.charts import Chart, parse_chart
 from ..common.process import (
-    _VALID_ENV_KEY_REGEX,
     CodeRunParams,
     ExecuteResponse,
     ExecutionArtifacts,
@@ -51,6 +51,7 @@ class AsyncProcess:
     def __init__(
         self,
         code_toolbox: SandboxCodeToolbox,
+        language: str,
         api_client: ProcessApi,
     ):
         """Initialize a new Process instance.
@@ -60,6 +61,7 @@ class AsyncProcess:
             api_client (ProcessApi): API client for process operations.
         """
         self._code_toolbox: SandboxCodeToolbox = code_toolbox
+        self._language: str = language
         self._api_client: ProcessApi = api_client
 
     @staticmethod
@@ -133,22 +135,9 @@ class AsyncProcess:
             result = await sandbox.process.exec("sleep 10", timeout=5)
             ```
         """
-        if env:
-            for key in env:
-                if not _VALID_ENV_KEY_REGEX.match(key):
-                    raise ValueError(f"Invalid environment variable name: {key!r}")
-            safe_env_exports = (
-                " ".join(
-                    [
-                        f"""export {key}="$(printf '%s' '{base64.b64encode(value.encode()).decode()}' | base64 -d)";"""
-                        for key, value in env.items()
-                    ]
-                )
-                + " "
-            )
-            command = f"{safe_env_exports}{command}"
-
         execute_request = ExecuteRequest(command=command, cwd=cwd, timeout=timeout)
+        if env is not None:
+            cast(Any, execute_request).envs = env
 
         response = await self._api_client.execute_command(
             request=execute_request,
@@ -241,8 +230,43 @@ class AsyncProcess:
                     print(f"Points: {element.points}")
             ```
         """
-        command = self._code_toolbox.get_run_command(code, params)
-        return await self.exec(command, env=params.env if params else None, timeout=timeout)
+        code_run_params = params or CodeRunParams()
+        code_run_request = cast(Any, CodeRunRequest)(
+            code=code,
+            language=self._language,
+            argv=code_run_params.argv,
+            envs=code_run_params.env,
+            timeout=timeout,
+        )
+
+        try:
+            response = await cast(Any, self._api_client).code_run(
+                request=code_run_request,
+                _request_timeout=http_timeout(timeout + 5 if timeout else None),
+            )
+        except NotFoundException:
+            command = self._code_toolbox.get_run_command(code, code_run_params)
+            return await self.exec(command, env=code_run_params.env, timeout=timeout)
+
+        charts: list[Chart] = []
+        for chart_data in response.artifacts.charts if response.artifacts and response.artifacts.charts else []:
+            if isinstance(chart_data, dict):
+                chart = parse_chart(**chart_data)
+                if chart:
+                    charts.append(chart)
+
+        stdout = response.result or ""
+        artifacts = ExecutionArtifacts(stdout=stdout, charts=charts)
+
+        # TODO: Remove model_construct once everything is migrated to pydantic # pylint: disable=fixme
+        return ExecuteResponse.model_construct(
+            exit_code=(
+                response.exit_code if response.exit_code is not None else response.additional_properties.get("code")
+            ),
+            result=stdout,
+            artifacts=artifacts,
+            additional_properties=response.additional_properties,
+        )
 
     @intercept_errors(message_prefix="Failed to create session: ")
     @with_instrumentation()
@@ -382,7 +406,11 @@ class AsyncProcess:
             _request_timeout=http_timeout(timeout + 5 if timeout else None),
         )
 
-        stdout, stderr = demux_log(response.output.encode("utf-8", "ignore") if response.output else b"")
+        if response.stdout is not None or response.stderr is not None:
+            stdout = (response.stdout or "").encode("utf-8", "ignore")
+            stderr = (response.stderr or "").encode("utf-8", "ignore")
+        else:
+            stdout, stderr = demux_log(response.output.encode("utf-8", "ignore") if response.output else b"")
 
         return SessionExecuteResponse.model_construct(
             cmd_id=response.cmd_id,

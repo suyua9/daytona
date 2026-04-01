@@ -559,6 +559,7 @@ paths:
         in: query
         name: scale
         schema:
+          format: float64
           type: number
       responses:
         "200":
@@ -662,6 +663,7 @@ paths:
         in: query
         name: scale
         schema:
+          format: float64
           type: number
       responses:
         "200":
@@ -1050,7 +1052,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/git.GitDeleteBranchRequest"
+              $ref: "#/components/schemas/pkg_toolbox_git.GitDeleteBranchRequest"
         description: Delete branch request
         required: true
       responses:
@@ -1468,6 +1470,29 @@ paths:
       summary: Check if port is in use
       tags:
       - port
+  /process/code-run:
+    post:
+      description: "Execute Python, JavaScript, or TypeScript code and return output,\
+        \ exit code, and artifacts"
+      operationId: CodeRun
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CodeRunRequest"
+        description: Code execution request
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CodeRunResponse"
+          description: OK
+      summary: Execute code
+      tags:
+      - process
+      x-codegen-request-body-name: request
   /process/execute:
     post:
       description: Execute a shell command and return the output and exit code
@@ -2012,6 +2037,64 @@ paths:
       - info
 components:
   schemas:
+    CodeRunArtifacts:
+      example:
+        charts:
+        - key: ""
+        - key: ""
+      properties:
+        charts:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+      type: object
+    CodeRunRequest:
+      example:
+        code: code
+        envs:
+          key: envs
+        language: language
+        argv:
+        - argv
+        - argv
+        timeout: 0
+      properties:
+        argv:
+          items:
+            type: string
+          type: array
+        code:
+          type: string
+        envs:
+          additionalProperties:
+            type: string
+          type: object
+        language:
+          description: "python, javascript, typescript"
+          type: string
+        timeout:
+          type: integer
+      required:
+      - code
+      - language
+      type: object
+    CodeRunResponse:
+      example:
+        result: result
+        exitCode: 0
+        artifacts:
+          charts:
+          - key: ""
+          - key: ""
+      properties:
+        artifacts:
+          $ref: "#/components/schemas/CodeRunArtifacts"
+        exitCode:
+          type: integer
+        result:
+          type: string
+      type: object
     Command:
       example:
         exitCode: 0
@@ -2204,6 +2287,8 @@ components:
     ExecuteRequest:
       example:
         cwd: cwd
+        envs:
+          key: envs
         command: command
         timeout: 0
       properties:
@@ -2212,6 +2297,11 @@ components:
         cwd:
           description: Current working directory
           type: string
+        envs:
+          additionalProperties:
+            type: string
+          description: Environment variables to set for the command
+          type: object
         timeout:
           description: "Timeout in seconds, defaults to 10 seconds"
           type: integer
@@ -3330,7 +3420,7 @@ components:
       additionalProperties:
         type: object
       type: object
-    git.GitDeleteBranchRequest:
+    pkg_toolbox_git.GitDeleteBranchRequest:
       properties:
         name:
           type: string

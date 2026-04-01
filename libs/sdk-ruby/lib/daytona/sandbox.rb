@@ -153,6 +153,7 @@ module Daytona
         code_toolbox:,
         toolbox_api: process_api,
         get_preview_link: proc { |port| preview_url(port) },
+        language: (labels || {}).fetch('code-toolbox-language', 'python'),
         otel_state:
       )
       @fs = FileSystem.new(sandbox_id: id, toolbox_api: fs_api, otel_state:)

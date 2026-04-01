@@ -153,11 +153,13 @@ export class Sandbox implements SandboxDto {
 
     this.fs = new FileSystem(this.clientConfig, new FileSystemApi(this.clientConfig, '', this.axiosInstance))
     this.git = new Git(new GitApi(this.clientConfig, '', this.axiosInstance))
+    const language = sandboxDto.labels?.['code-toolbox-language']
     this.process = new Process(
       this.clientConfig,
       this.codeToolbox,
       new ProcessApi(this.clientConfig, '', this.axiosInstance),
       getPreviewToken,
+      language,
     )
     this.codeInterpreter = new CodeInterpreter(
       this.clientConfig,

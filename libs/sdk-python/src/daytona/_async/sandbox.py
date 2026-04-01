@@ -101,6 +101,7 @@ class AsyncSandbox(SandboxDto):
         toolbox_api: ApiClient,
         sandbox_api: SandboxApi,
         code_toolbox: SandboxCodeToolbox,
+        language: str,
     ):
         """Initialize a new Sandbox instance.
 
@@ -121,7 +122,7 @@ class AsyncSandbox(SandboxDto):
 
         self._fs = AsyncFileSystem(FileSystemApi(self._toolbox_api))
         self._git = AsyncGit(GitApi(self._toolbox_api))
-        self._process = AsyncProcess(code_toolbox, ProcessApi(self._toolbox_api))
+        self._process = AsyncProcess(code_toolbox, language, ProcessApi(self._toolbox_api))
         self._computer_use = AsyncComputerUse(ComputerUseApi(self._toolbox_api))
         self._code_interpreter = AsyncCodeInterpreter(InterpreterApi(self._toolbox_api))
         self._info_api: InfoApi = InfoApi(self._toolbox_api)

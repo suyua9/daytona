@@ -19,17 +19,17 @@ type GitStatus struct {
 	BranchPublished bool          `json:"branchPublished" validate:"optional"`
 	Ahead           int           `json:"ahead" validate:"optional"`
 	Behind          int           `json:"behind" validate:"optional"`
-} // @name GitStatus
+} //	@name	GitStatus
 
 type FileStatus struct {
 	Name     string `json:"name" validate:"required"`
 	Extra    string `json:"extra" validate:"required"`
 	Staging  Status `json:"staging" validate:"required"`
 	Worktree Status `json:"worktree" validate:"required"`
-} // @name FileStatus
+} //	@name	FileStatus
 
 // Status status code of a file in the Worktree
-type Status string // @name Status
+type Status string //	@name	Status
 
 const (
 	Unmodified         Status = "Unmodified"

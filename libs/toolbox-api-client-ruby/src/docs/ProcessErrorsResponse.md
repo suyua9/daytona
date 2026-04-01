@@ -1,0 +1,20 @@
+# DaytonaToolboxApiClient::ProcessErrorsResponse
+
+## Properties
+
+| Name | Type | Description | Notes |
+| ---- | ---- | ----------- | ----- |
+| **errors** | **String** |  | [optional] |
+| **process_name** | **String** |  | [optional] |
+
+## Example
+
+```ruby
+require 'daytona_toolbox_api_client'
+
+instance = DaytonaToolboxApiClient::ProcessErrorsResponse.new(
+  errors: null,
+  process_name: null
+)
+```
+

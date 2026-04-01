@@ -686,11 +686,11 @@ func (a *GitAPIService) CreateBranchExecute(r GitAPICreateBranchRequest) (*http.
 type GitAPIDeleteBranchRequest struct {
 	ctx context.Context
 	ApiService GitAPI
-	request *GitGitDeleteBranchRequest
+	request *PkgToolboxGitGitDeleteBranchRequest
 }
 
 // Delete branch request
-func (r GitAPIDeleteBranchRequest) Request(request GitGitDeleteBranchRequest) GitAPIDeleteBranchRequest {
+func (r GitAPIDeleteBranchRequest) Request(request PkgToolboxGitGitDeleteBranchRequest) GitAPIDeleteBranchRequest {
 	r.request = &request
 	return r
 }

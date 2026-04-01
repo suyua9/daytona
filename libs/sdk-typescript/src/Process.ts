@@ -10,15 +10,17 @@ import {
   Session,
   SessionExecuteRequest,
   SessionExecuteResponse as ApiSessionExecuteResponse,
+  CodeRunRequest,
   PtyCreateRequest,
   PtySessionInfo,
   SessionSendInputRequest,
 } from '@daytonaio/toolbox-api-client'
 import { SandboxCodeToolbox } from './Sandbox'
 import { ExecuteResponse } from './types/ExecuteResponse'
+import { parseChart } from './types/Charts'
 import { ArtifactParser } from './utils/ArtifactParser'
 import { stdDemuxStream } from './utils/Stream'
-import { Buffer } from 'buffer'
+import { isAxiosError } from 'axios'
 import { PtyHandle } from './PtyHandle'
 import { PtyCreateOptions, PtyConnectOptions } from './types/Pty'
 import { createSandboxWebSocket } from './utils/WebSocket'
@@ -65,6 +67,7 @@ export class Process {
     private readonly codeToolbox: SandboxCodeToolbox,
     private readonly apiClient: ProcessApi,
     private readonly getPreviewToken: () => Promise<string>,
+    private readonly language?: string,
   ) {}
 
   /**
@@ -106,20 +109,13 @@ export class Process {
           throw new Error(`Invalid environment variable name: '${key}'`)
         }
       }
-      const safeEnvExports =
-        Object.entries(env)
-          .map(([key, value]) => {
-            const encodedValue = Buffer.from(value).toString('base64')
-            return `export ${key}="$(printf '%s' '${encodedValue}' | base64 -d)"`
-          })
-          .join('; ') + '; '
-      command = `${safeEnvExports}${command}`
     }
 
     const response = await this.apiClient.executeCommand({
       command,
       timeout,
       cwd: cwd,
+      envs: env && Object.keys(env).length ? env : undefined,
     })
 
     // Parse artifacts from the output
@@ -193,6 +189,41 @@ export class Process {
    */
   @WithInstrumentation()
   public async codeRun(code: string, params?: CodeRunParams, timeout?: number): Promise<ExecuteResponse> {
+    // Try daemon-side code-run endpoint if language is available
+    if (this.language) {
+      try {
+        const request: CodeRunRequest = {
+          code,
+          language: this.language,
+          argv: params?.argv,
+          envs: params?.env,
+          timeout,
+        }
+        const response = await this.apiClient.codeRun(request)
+        const data = response.data
+
+        // Map daemon charts through parseChart for SDK Chart types
+        const charts = data.artifacts?.charts?.map((c) => parseChart(c))
+
+        return {
+          exitCode: data.exitCode ?? 0,
+          result: data.result ?? '',
+          artifacts: {
+            stdout: data.result ?? '',
+            charts: charts?.length ? charts : undefined,
+          },
+        }
+      } catch (error) {
+        // Fall back to client-side code-run for old daemons without /process/code-run
+        if (isAxiosError(error) && (error.response?.status === 404 || error.response?.status === 405)) {
+          const runCommand = this.codeToolbox.getRunCommand(code, params)
+          return this.executeCommand(runCommand, undefined, params?.env, timeout)
+        }
+        throw error
+      }
+    }
+
+    // Fallback: no language set, use legacy client-side code toolbox
     const runCommand = this.codeToolbox.getRunCommand(code, params)
     return this.executeCommand(runCommand, undefined, params?.env, timeout)
   }
@@ -325,9 +356,17 @@ export class Process {
       timeout ? { timeout: timeout * 1000 } : {},
     )
 
-    // Demux the output if it exists
+    // Use pre-separated stdout/stderr from new daemon when available
+    if (response.data.stdout !== undefined || response.data.stderr !== undefined) {
+      return {
+        ...response.data,
+        stdout: response.data.stdout ?? '',
+        stderr: response.data.stderr ?? '',
+      }
+    }
+
+    // Fall back to client-side demux for old daemons
     if (response.data.output) {
-      // Convert string to bytes for demuxing
       const outputBytes = new TextEncoder().encode(response.data.output)
       const demuxedCommandLogs = parseSessionCommandLogs(outputBytes)
       return {

@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-require 'base64'
 require 'json'
 require 'uri'
 
@@ -20,18 +19,23 @@ module Daytona
     # @return [Proc] Function to get preview link for a port
     attr_reader :get_preview_link
 
+    # @return [String] The language for code execution (e.g. 'python', 'typescript', 'javascript')
+    attr_reader :language
+
     # Initialize a new Process instance
     #
     # @param code_toolbox [Daytona::SandboxPythonCodeToolbox, Daytona::SandboxTsCodeToolbox]
     # @param sandbox_id [String] The ID of the Sandbox
     # @param toolbox_api [DaytonaToolboxApiClient::ProcessApi] API client for Sandbox operations
     # @param get_preview_link [Proc] Function to get preview link for a port
+    # @param language [String] The language for code execution
     # @param otel_state [Daytona::OtelState, nil]
-    def initialize(code_toolbox:, sandbox_id:, toolbox_api:, get_preview_link:, otel_state: nil)
+    def initialize(code_toolbox:, sandbox_id:, toolbox_api:, get_preview_link:, language: 'python', otel_state: nil)
       @code_toolbox = code_toolbox
       @sandbox_id = sandbox_id
       @toolbox_api = toolbox_api
       @get_preview_link = get_preview_link
+      @language = language
       @otel_state = otel_state
     end
 
@@ -55,6 +59,7 @@ module Daytona
     #   # Command with timeout
     #   result = sandbox.process.exec("sleep 10", timeout: 5)
     def exec(command:, cwd: nil, env: nil, timeout: nil) # rubocop:disable Metrics/MethodLength
+      envs = nil
       if env && !env.empty?
         env.each_key do |key|
           unless key.match?(/\A[A-Za-z_][A-Za-z0-9_]*\z/)
@@ -62,13 +67,11 @@ module Daytona
                   "Invalid environment variable name: '#{key}'"
           end
         end
-        safe_env_exports = env.map do |key, value|
-          "export #{key}=\"$(printf '%s' '#{Base64.strict_encode64(value)}' | base64 -d)\""
-        end.join('; ')
-        command = "#{safe_env_exports}; #{command}"
+        envs = env
       end
 
-      response = toolbox_api.execute_command(DaytonaToolboxApiClient::ExecuteRequest.new(command:, cwd:, timeout:))
+      response = toolbox_api.execute_command(DaytonaToolboxApiClient::ExecuteRequest.new(command:, cwd:, envs:,
+                                                                                         timeout:))
       # Post-process the output to extract ExecutionArtifacts
       artifacts = parse_output(response.result.split("\n", -1))
 
@@ -95,7 +98,25 @@ module Daytona
     #     print(f"Sum: {x + y}")
     #   CODE
     #   puts response.artifacts.stdout  # Prints: Sum: 30
-    def code_run(code:, params: nil, timeout: nil)
+    def code_run(code:, params: nil, timeout: nil) # rubocop:disable Metrics/MethodLength
+      response = toolbox_api.code_run(
+        DaytonaToolboxApiClient::CodeRunRequest.new(
+          code:, language:, argv: params&.argv, envs: params&.env, timeout:
+        )
+      )
+
+      charts = (response.artifacts&.charts || []).map do |chart_data|
+        Charts.parse(chart_data.transform_keys(&:to_sym))
+      end
+
+      ExecuteResponse.new(
+        exit_code: response.exit_code,
+        result: response.result,
+        artifacts: ExecutionArtifacts.new(response.result, charts)
+      )
+    rescue DaytonaToolboxApiClient::ApiError => e
+      raise unless e.code == 404
+
       exec(command: code_toolbox.get_run_command(code, params), env: params&.env, timeout:)
     end
 
@@ -183,10 +204,15 @@ module Daytona
       response = toolbox_api.session_execute_command(
         session_id,
         DaytonaToolboxApiClient::SessionExecuteRequest.new(command: req.command, run_async: req.run_async,
-                                                           suppress_input_echo: req.suppress_input_echo)
+                                                            suppress_input_echo: req.suppress_input_echo)
       )
 
-      stdout, stderr = Util.demux(response.output || '')
+      if response.stdout || response.stderr
+        stdout = response.stdout || ''
+        stderr = response.stderr || ''
+      else
+        stdout, stderr = Util.demux(response.output || '')
+      end
 
       SessionExecuteResponse.new(
         cmd_id: response.cmd_id,
@@ -194,7 +220,6 @@ module Daytona
         stdout:,
         stderr:,
         exit_code: response.exit_code,
-        # TODO: DaytonaApiClient::SessionExecuteResponse doesn't have additional_properties attribute
         additional_properties: {}
       )
     end

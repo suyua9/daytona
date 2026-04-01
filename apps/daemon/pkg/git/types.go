@@ -11,4 +11,4 @@ type GitCommitInfo struct {
 	Email     string    `json:"email" validate:"required"`
 	Message   string    `json:"message" validate:"required"`
 	Timestamp time.Time `json:"timestamp" validate:"required"`
-} // @name GitCommitInfo
+} //	@name	GitCommitInfo

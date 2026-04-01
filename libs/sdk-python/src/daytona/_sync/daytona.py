@@ -472,6 +472,7 @@ class Daytona:
             self._toolbox_api_client,
             self._sandbox_api,
             code_toolbox,
+            str(params.language),
         )
 
         if sandbox.state != SandboxState.STARTED:
@@ -566,6 +567,7 @@ class Daytona:
             self._toolbox_api_client,
             self._sandbox_api,
             code_toolbox,
+            CodeLanguage.PYTHON.value,
         )
 
     @intercept_errors(message_prefix="Failed to list sandboxes: ")
@@ -605,6 +607,7 @@ class Daytona:
                     self._toolbox_api_client,
                     self._sandbox_api,
                     self._get_code_toolbox(self._validate_language_label(sandbox.labels.get("code-toolbox-language"))),
+                    self._validate_language_label(sandbox.labels.get("code-toolbox-language")).value,
                 )
                 for sandbox in response.items
             ],

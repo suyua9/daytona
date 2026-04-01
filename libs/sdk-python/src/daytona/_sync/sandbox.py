@@ -102,6 +102,7 @@ class Sandbox(SandboxDto):
         toolbox_api: ApiClient,
         sandbox_api: SandboxApi,
         code_toolbox: SandboxCodeToolbox,
+        language: str,
     ):
         """Initialize a new Sandbox instance.
 
@@ -122,7 +123,7 @@ class Sandbox(SandboxDto):
 
         self._fs = FileSystem(FileSystemApi(self._toolbox_api))
         self._git = Git(GitApi(self._toolbox_api))
-        self._process = Process(code_toolbox, ProcessApi(self._toolbox_api))
+        self._process = Process(code_toolbox, language, ProcessApi(self._toolbox_api))
         self._computer_use = ComputerUse(ComputerUseApi(self._toolbox_api))
         self._code_interpreter = CodeInterpreter(InterpreterApi(self._toolbox_api))
         self._info_api: InfoApi = InfoApi(self._toolbox_api)
